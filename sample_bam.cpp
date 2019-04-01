@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <random>
 #include <htslib/sam.h>
 #include <htslib/kstring.h>
 #include <boost/program_options.hpp>
@@ -19,13 +20,16 @@ class sample_bamc {
         std::string get_format(std::string lfname_str, std::string open_mode);
         htsFile* get_hts_handle(std::string lfname_str, std::string format);
         bool has_suffix(const std::string &str, const std::string &suffix);
+        unsigned long get_frag_count(std::string& infile_str);
 
     private:
         po::options_description desc;
         std::string infile_str;
         std::string outfile_str;
-        long top_seed;
+        unsigned long long top_seed;
+        unsigned long interval;
         double sample_p;
+        unsigned long infile_frag_count;
         htsFile *fp_in = NULL;
         htsFile *fp_out = NULL;
         bam_hdr_t *hdr_in = NULL;
@@ -52,6 +56,8 @@ bool sample_bamc::parse_args(int argc, char* argv[]) {
             "Top seed for sampling.")
         ("sample_p,s", po::value(&sample_p),
             "Percentage of reads to return.")
+        ("interval", po::value(&interval)->default_value(1000000),
+            "Interval for shuffle.")
         ;
 
     po::variables_map vm;
@@ -91,6 +97,8 @@ bool sample_bamc::parse_args(int argc, char* argv[]) {
     } else {
         std::cout << "Error: sample_p is not set.\n";
     }
+
+    std::cout << "Interval is set to: " << interval << "\n";
 
     return all_set;
 
@@ -168,10 +176,48 @@ void sample_bamc::bam_handle_init(std::string fname_str, const bam_hdr_t* lhdr,
     }
 }
 
+
+// Returns the number of reads in a file
+unsigned long sample_bamc::get_frag_count(std::string& infile_str) {
+
+    htsFile *lfp = NULL;
+    bam_hdr_t *lhdr = NULL;
+
+    bam_handle_init(infile_str, NULL, lfp, lhdr, "r");
+
+    bam1_t* read1 = bam_init1();
+    bam1_t* read2 = bam_init1();
+    unsigned long frag_count = 0;
+    while(sam_read1(lfp, lhdr, read1) >= 0) {
+        // Increment for read1
+
+        if (sam_read1(lfp, lhdr, read2) < 0) {
+            bam_hdr_destroy(lhdr);
+            sam_close(lfp);
+            std::string lstr = "Failed to obtain second read from get_read_count.\n";
+            throw std::runtime_error(lstr);
+        } else {
+            // Increment for read2
+        }
+
+        frag_count++;
+    }
+
+    bam_hdr_destroy(lhdr);
+    sam_close(lfp);
+
+    return frag_count;
+
+}
+
 void sample_bamc::initialize() {
 
     bam_handle_init(infile_str, NULL, fp_in, hdr_in, "r");
     bam_handle_init(outfile_str, hdr_in, fp_out, hdr_out, "w");
+
+    // Initialize the number of reads in the input file.
+    infile_frag_count = get_frag_count(infile_str);
+    std::cout << "Infile_frag_count: " << infile_frag_count << "\n";
 
 }
 
@@ -181,9 +227,72 @@ void sample_bamc::main_func() {
     // sorted with respect to query name. So pair of reads would be one after
     // another. 
 
-    // 1. Open the input file in the read mode
+    std::vector<int> seq_vec(interval);
+    std::mt19937_64 r_engine(top_seed);
 
-    // 2. Open the output file in the write mode
+    bam1_t* read1 = bam_init1();
+    bam1_t* read2 = bam_init1();
+
+    // Total number of reads loaded/read till this point.
+    unsigned long total_frag_ind = 0;
+   
+    unsigned long frag_left = infile_frag_count; 
+    unsigned long write_ind = 0;
+    unsigned long read_ind = 0;
+    unsigned long frag_this_iter = 0;
+    unsigned long write_lim = 0;
+
+    while(sam_read1(fp_in, hdr_in, read1) >= 0) {
+        // Increment for read1
+
+        if (sam_read1(fp_in, hdr_in, read2) < 0) {
+            std::string lstr = "Failed to read second read.\n";
+            throw std::runtime_error(lstr);
+        } else {
+            // Increment for read2
+        }
+
+        if (total_frag_ind % interval == 0) {
+            // Do the assignment
+            if (frag_left >= interval) {
+                frag_this_iter = interval;
+                frag_left = frag_left - interval;
+            } else {
+                frag_this_iter = frag_left;
+                frag_left = 0;
+            }
+            for (unsigned long j = 0; j < frag_this_iter; j++) {
+                unsigned long l_seq_val = total_frag_ind + j;
+                seq_vec[j] = l_seq_val;       
+            }
+
+            // Do the shuffle
+            shuffle(seq_vec.begin(), seq_vec.end(), r_engine);
+            write_ind = 0;     
+            read_ind = 0;     
+            double write_lim_f = (frag_this_iter * sample_p) /100.0;
+            write_lim = (unsigned long) write_lim_f;  
+        }
+
+        // Write if appropriate
+        if (write_ind <= write_lim) {
+            if (seq_vec[read_ind] == total_frag_ind) {
+                
+                if (sam_write1(fp_out, hdr_out, read1) < 0) {
+                    std::cout << "Problem with sam_write1 for read1" << "\n";
+                }
+
+                if (sam_write1(fp_out, hdr_out, read2) < 0) {
+                    std::cout << "Problem with sam_write1 for read2" << "\n";
+                }
+
+                write_ind++;
+            }
+        }
+
+        read_ind++;
+        total_frag_ind++; 
+    }
 }
 
 void sample_bamc::free_vars() {
