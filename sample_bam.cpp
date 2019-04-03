@@ -1,5 +1,7 @@
 #include <iostream>
 #include <string>
+#include <vector>
+#include <set>
 #include <random>
 #include <htslib/sam.h>
 #include <htslib/kstring.h>
@@ -34,6 +36,7 @@ class sample_bamc {
         htsFile *fp_out = NULL;
         bam_hdr_t *hdr_in = NULL;
         bam_hdr_t *hdr_out = NULL;
+        long read_limit;
 
 };
 
@@ -58,6 +61,8 @@ bool sample_bamc::parse_args(int argc, char* argv[]) {
             "Percentage of reads to return.")
         ("interval", po::value(&interval)->default_value(1000000),
             "Interval for shuffle.")
+        ("read_limit,r", po::value(&read_limit)->default_value(-1),
+            "Pair of reads to process")
         ;
 
     po::variables_map vm;
@@ -194,6 +199,9 @@ unsigned long sample_bamc::get_frag_count(std::string& infile_str) {
         if (sam_read1(lfp, lhdr, read2) < 0) {
             bam_hdr_destroy(lhdr);
             sam_close(lfp);
+            bam_destroy1(read1);
+            bam_destroy1(read2);
+
             std::string lstr = "Failed to obtain second read from get_read_count.\n";
             throw std::runtime_error(lstr);
         } else {
@@ -205,6 +213,8 @@ unsigned long sample_bamc::get_frag_count(std::string& infile_str) {
 
     bam_hdr_destroy(lhdr);
     sam_close(lfp);
+    bam_destroy1(read1);
+    bam_destroy1(read2);
 
     return frag_count;
 
@@ -227,7 +237,8 @@ void sample_bamc::main_func() {
     // sorted with respect to query name. So pair of reads would be one after
     // another. 
 
-    std::vector<int> seq_vec(interval);
+    std::vector<unsigned long> seq_vec;
+    std::set<unsigned long> write_set;
     std::mt19937_64 r_engine(top_seed);
 
     bam1_t* read1 = bam_init1();
@@ -238,9 +249,9 @@ void sample_bamc::main_func() {
    
     unsigned long frag_left = infile_frag_count; 
     unsigned long write_ind = 0;
-    unsigned long read_ind = 0;
     unsigned long frag_this_iter = 0;
     unsigned long write_lim = 0;
+    unsigned long total_frag_written = 0;
 
     while(sam_read1(fp_in, hdr_in, read1) >= 0) {
         // Increment for read1
@@ -253,6 +264,8 @@ void sample_bamc::main_func() {
         }
 
         if (total_frag_ind % interval == 0) {
+
+
             // Do the assignment
             if (frag_left >= interval) {
                 frag_this_iter = interval;
@@ -261,22 +274,26 @@ void sample_bamc::main_func() {
                 frag_this_iter = frag_left;
                 frag_left = 0;
             }
+            seq_vec.assign(frag_this_iter, 0);
+            write_set.clear();
             for (unsigned long j = 0; j < frag_this_iter; j++) {
-                unsigned long l_seq_val = total_frag_ind + j;
+                unsigned long l_seq_val = total_frag_ind + j + 1;
                 seq_vec[j] = l_seq_val;       
             }
 
             // Do the shuffle
             shuffle(seq_vec.begin(), seq_vec.end(), r_engine);
             write_ind = 0;     
-            read_ind = 0;     
             double write_lim_f = (frag_this_iter * sample_p) /100.0;
             write_lim = (unsigned long) write_lim_f;  
+            for (unsigned int j = 0; j < write_lim ; j++) {
+                write_set.insert(seq_vec[j]);
+            }
         }
 
         // Write if appropriate
-        if (write_ind <= write_lim) {
-            if (seq_vec[read_ind] == total_frag_ind) {
+        if (write_ind < write_lim) {
+            if (write_set.find(total_frag_ind) != write_set.end()) {
                 
                 if (sam_write1(fp_out, hdr_out, read1) < 0) {
                     std::cout << "Problem with sam_write1 for read1" << "\n";
@@ -287,12 +304,20 @@ void sample_bamc::main_func() {
                 }
 
                 write_ind++;
+                total_frag_written++;
             }
         }
 
-        read_ind++;
         total_frag_ind++; 
+        if (total_frag_ind == read_limit) {
+            break;
+        }
     }
+
+    std::cout << "Total frag written: " << total_frag_written << "\n";
+
+    bam_destroy1(read1);
+    bam_destroy1(read2);
 }
 
 void sample_bamc::free_vars() {
@@ -301,6 +326,7 @@ void sample_bamc::free_vars() {
     bam_hdr_destroy(hdr_out);
     sam_close(fp_in);
     sam_close(fp_out);
+
 }
 
 int main(int argc, char** argv) {
