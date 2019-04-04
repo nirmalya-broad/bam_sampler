@@ -42,7 +42,7 @@ class sample_bamc {
 
 void sample_bamc::print_help() {
     std::cout << desc << "\n";
-    std::cout << "Usage: sample_bamc --infile <sam/bam> --outfile <sam/bam>"
+    std::cout << "Usage: sample_bam --infile <sam/bam> --outfile <sam/bam>"
         " --top_seed <top_seed_number>  --sample_p <sample percentage>"
         "\n\n";
 }
@@ -277,7 +277,7 @@ void sample_bamc::main_func() {
             seq_vec.assign(frag_this_iter, 0);
             write_set.clear();
             for (unsigned long j = 0; j < frag_this_iter; j++) {
-                unsigned long l_seq_val = total_frag_ind + j + 1;
+                unsigned long l_seq_val = total_frag_ind + j;
                 seq_vec[j] = l_seq_val;       
             }
 
@@ -289,11 +289,20 @@ void sample_bamc::main_func() {
             for (unsigned int j = 0; j < write_lim ; j++) {
                 write_set.insert(seq_vec[j]);
             }
+
+            std::cout << "\n\n------------------\n";
+            for (auto x: write_set) { 
+                std::cout << x << ' ';
+            }
+            std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>\n\n";
+            
         }
 
         // Write if appropriate
         if (write_ind < write_lim) {
             if (write_set.find(total_frag_ind) != write_set.end()) {
+
+                std::cout << total_frag_ind << ' ';
                 
                 if (sam_write1(fp_out, hdr_out, read1) < 0) {
                     std::cout << "Problem with sam_write1 for read1" << "\n";
