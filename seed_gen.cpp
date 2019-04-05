@@ -53,6 +53,7 @@ class seed_genc {
         bam_reader in_reader;        
         bam_stat in_stat;
         long depth;
+        std::vector<double> sample_p_vec;
 };
 
 seed_genc::seed_genc(args_c args_o)
@@ -135,10 +136,10 @@ bool args_c::parse_args(int argc, char* argv[]) {
             } else {    
                 std::cout << "steps_num is set to: " << steps_num << "\n";
             }
-        } else if (0 == run_type.compare("depth_p")) {
+        } else if (0 == run_type.compare("depth")) {
             if (depth_p <= 0) {
                 all_set = false;
-                std::cout << "Error: depth need to be a positive integer.\n";
+                std::cout << "Error: depth need to be a positive number.\n";
             } else {
                 std::cout << "depth is set to: " << depth_p << "\n";
             }
@@ -170,27 +171,47 @@ void seed_genc::initialize() {
 void seed_genc::main_func() {
     std::mt19937_64 r_engine(main_seed);
 
-    bam1_t* read1 = bam_init1();
-    bam1_t* read2 = bam_init1();
+    // Let's get the number of fragments in the file.
+    std::cout << "infile_frag_count: " << infile_frag_count << "\n";
 
+    
+    if (0 == run_type.compare("steps")) {
+        
+        // get the percentage of reads to sample 
+        // If steps equal to 1; then it would indicate 100% of the reads
+        // A typical step size would be more than 10 and may be less than 20.
 
-    unsigned long total_frag = 0;
-      while(in_reader.sam_read(read1) >= 0) {
-        // Increment for read1
-
-        if (in_reader.sam_read(read2) < 0) {
-            std::string lstr = "Failed to read second read.\n";
-            throw std::runtime_error(lstr);
-        } else {
-            // Increment for read2
+        for (int j = 1; j <= steps_num; j++) {
+            double l_sample_p_log = (log2(100.0) * j ) / steps_num;
+            double l_sample_p = exp2(l_sample_p_log);
+            sample_p_vec.push_back(l_sample_p);
         }
-        total_frag++;
-    }
 
-    std::cout << "total_frag: " << total_frag << "\n";
+        std::cout << "Printing sample_p_vec\n";
+        for (auto& x : sample_p_vec) std::cout << x << "\n";
+
+        for (int j = 0 ; j < steps_num; j++) {
+            for (int k = 0; k < repeat_num; k++) {
+                int l_step = j + 1;
+                int l_repeat = k + 1;
+                std::cout << "Step_" << l_step << " Repeat_" << l_repeat 
+                    << " " <<  sample_p_vec[j] << " " << r_engine() << "\n";
+            }
+        }
+
+    } else if (0 == run_type.compare("depth")) {
+        // Get the depth in terms of percentage of reads
+        for (int k = 0; k < repeat_num; k++) {
+            int l_repeat = k + 1;
+            int l_step = 1;
+            std::cout << "Step_" << l_step << " Repeat_" << l_repeat
+                << " " << depth_p << " " << r_engine() << "\n";
+        }
+    }
+    
+    // Now create the output file that would be used for generating the 
+    // sampling distribution of the bam file.    
      
-    bam_destroy1(read1);
-    bam_destroy1(read2);
 }
 
 
