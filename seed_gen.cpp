@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
 #include <set>
@@ -152,7 +153,6 @@ bool args_c::parse_args(int argc, char* argv[]) {
         std::cout << "Error: run_type is not set.\n";
     }
 
-
     if (repeat_num <= 0) {
         all_set = false;
         std::cout << "Error: repeat_num need to be a positive number.\n";
@@ -170,6 +170,7 @@ void seed_genc::initialize() {
 
 void seed_genc::main_func() {
     std::mt19937_64 r_engine(main_seed);
+    std::ofstream outf(outfile_str);
 
     // Let's get the number of fragments in the file.
     std::cout << "infile_frag_count: " << infile_frag_count << "\n";
@@ -187,15 +188,13 @@ void seed_genc::main_func() {
             sample_p_vec.push_back(l_sample_p);
         }
 
-        std::cout << "Printing sample_p_vec\n";
-        for (auto& x : sample_p_vec) std::cout << x << "\n";
 
         for (int j = 0 ; j < steps_num; j++) {
             for (int k = 0; k < repeat_num; k++) {
                 int l_step = j + 1;
                 int l_repeat = k + 1;
-                std::cout << "Step_" << l_step << " Repeat_" << l_repeat 
-                    << " " <<  sample_p_vec[j] << " " << r_engine() << "\n";
+                outf << "S" << l_step << "\t" << "R" << l_repeat 
+                    << "\t" <<  sample_p_vec[j] << "\t" << r_engine() << "\n";
             }
         }
 
@@ -204,14 +203,13 @@ void seed_genc::main_func() {
         for (int k = 0; k < repeat_num; k++) {
             int l_repeat = k + 1;
             int l_step = 1;
-            std::cout << "Step_" << l_step << " Repeat_" << l_repeat
-                << " " << depth_p << " " << r_engine() << "\n";
+            outf << "S" << l_step << "\t" << "R" << l_repeat
+                << "\t" << depth_p << "\t" << r_engine() << "\n";
         }
     }
     
     // Now create the output file that would be used for generating the 
     // sampling distribution of the bam file.    
-     
 }
 
 
@@ -220,8 +218,6 @@ void seed_genc::free_vars() {
 }
 
 int main(int argc, char** argv) {
-
-
 
     args_c args_o;
     bool all_set = true;
