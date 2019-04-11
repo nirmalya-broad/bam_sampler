@@ -153,7 +153,7 @@ class SBCore:
             countfile_str
         print("Starting JL counter for RtS: " + count_cmd)
         call(count_cmd.split())
-        #self.clean_sam_single(outsamfile)
+        os.remove(unsorted_sam)
 
 
     def mainFunc(self):

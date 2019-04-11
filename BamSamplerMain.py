@@ -9,6 +9,9 @@ import shutil
 from subprocess import call 
 
 from sbcore import SBCore
+from Parse_featureCounts import get_all_gene_counts
+from Parse_featureCounts import get_all_metrics_counts
+
 
 class BamSamplerMain:
     def __init__(self, args):
@@ -23,7 +26,10 @@ class BamSamplerMain:
         self.add5 = args.add5
         self.add3  = args.add3
         self.patho_id = args.patho_id
+        self.project_id = args.project_id
         self.do_ref = args.do_ref
+        self.use_qsort = args.use_qsort
+        self.do_remove_bu = args.do_remove_bu
 
         basepath = os.path.dirname(os.path.realpath(__file__))
         self.Script_dir = basepath
@@ -62,6 +68,11 @@ class BamSamplerMain:
         if not os.path.exists(logdir):
             os.makedirs(logdir)
         self.logdir = logdir
+
+        summary_dir = outdir + "/summary_dir"
+        if not os.path.exists(summary_dir):
+            os.makedirs(summary_dir)
+        self.summary_dir = summary_dir
 
         UGER_cbp_dir = outdir + "/UGER_cbp"
 
@@ -113,6 +124,7 @@ class BamSamplerMain:
         return False
         
     def sort_by_queryname(self, infile, outdir):
+        use_qsort = self.use_qsort
         infile_name = ntpath.basename(infile)
         infile_name_u = None
         if infile_name.endswith('_pe.bam'):
@@ -121,7 +133,8 @@ class BamSamplerMain:
             infile_name_u = infile_name.replace('.bam', '_u.bam')
         outfile = outdir + "/" + infile_name_u
         samtools_path = self.samtools_path
-        self.sort_by_qname_internal(samtools_path, infile, outfile)
+        if use_qsort:
+            self.sort_by_qname_internal(samtools_path, infile, outfile)
         return outfile
 
     def symlink_outdir(self, infile, outdir):
@@ -133,9 +146,10 @@ class BamSamplerMain:
     def sort_by_qname_internal(self, samtools_path, inbam, outbam):
         samcmd = samtools_path + ' sort -n -o ' + outbam + ' ' + inbam
         print("sort_qname_cmd: " + samcmd)
-        #call(samcmd.split())
+        call(samcmd.split())
 
     def get_mapped_qsorted(self, infile_qsorted):
+        do_remove_bu = self.do_remove_bu
         remove_bu_path = self.remove_bu_path 
         infile_dirname = os.path.dirname(infile_qsorted)
         infile_basename = os.path.basename(infile_qsorted)
@@ -146,7 +160,8 @@ class BamSamplerMain:
         remove_bu_cmd = remove_bu_path + " -i " + infile_qsorted + " -o " +\
             mapped_qsorted + " -u " + unmapped_qsorted
         print("remove_bu_cmd started: " + remove_bu_cmd)
-        #call(remove_bu_cmd.split()) 
+        if do_remove_bu:
+            call(remove_bu_cmd.split()) 
         print("remove_bu_cmd end")
         self.infile_qsorted_mapped = mapped_qsorted
         return mapped_qsorted
@@ -172,16 +187,10 @@ class BamSamplerMain:
         return seed_table
 
     def get_sample_bam_core_cmd(self, lsuffix, ltop_seed, lsample_p):
-        #print("lsuffix: " + lsuffix + " ltop_seed: " + ltop_seed + " lsample_p: " + lsample_p)
         infile_str = self.infile_qsorted_mapped
         bamdir = self.bamdir
         patho_id = self.patho_id
         datadir = self.datadir
-        #infile_bname = os.path.basename(infile_str)
-        #out_suffix = "_" + lsuffix + ".bam"
-        #outfile_bname = infile_bname.replace(".bam", out_suffix)
-        #out_file = bamdir + "/" + outfile_bname
-        #sample_bam_path = self.sample_bam_path
         SBCore = self.SBCore
         SB_cmd = SBCore + " --infile " + infile_str + " --bamdir " + bamdir +\
             " --suffix " + lsuffix + " --sample_p " + lsample_p +\
@@ -200,6 +209,7 @@ class BamSamplerMain:
         lmemory = 8
         UGER_cbp = self.UGER_cbp
         UGER_cbp_dir = self.UGER_cbp_dir
+        lsuf_lst = list()
 
         jfile = open(sbcore_job_path, "w")
         with open(seed_table) as stab:
@@ -211,6 +221,7 @@ class BamSamplerMain:
                 lsample_p = parts[2]
                 ltop_seed = parts[3]
                 lsuffix = lsample + "_" + lrepeat
+                lsuf_lst.append(lsuffix)
                 print(lsuffix)
                 main_seed = self.main_seed
                 cmd_str = self.get_sample_bam_core_cmd(lsuffix, ltop_seed,\
@@ -221,6 +232,9 @@ class BamSamplerMain:
                 print(cmd_str2) 
                 jfile.write(cmd_str2 + "\n")
         jfile.close()
+
+        self.lsuf_lst = lsuf_lst
+
         joblist_cmd = UGER_cbp + " --cmds_file " + sbcore_job_path + \
                                 " --batch_size 1" + \
                                 " --num_cores " + str(num_cores) + \
@@ -243,6 +257,26 @@ class BamSamplerMain:
         print("gff_cmd: " + gff_cmd)
         call(gff_cmd.split())
 
+   
+    def write_read_count_table(self, lsample_lst, has_header, project_dir, subdir = ''):
+        ldelim = "/"
+        lproject_id = self.project_id
+        ref_acc = self.patho_id
+        
+        loutdir = self.summary_dir
+        if subdir:
+            loutdir += ldelim + subdir
+
+        if not os.path.exists(loutdir):
+            os.makedirs(loutdir)
+
+        loutfile = loutdir + ldelim +  lproject_id + "_" + ref_acc + "_counts.tsv"
+        if subdir:
+            project_dir += ldelim + subdir
+
+        get_all_gene_counts(project_dir, loutfile, lsample_lst, ref_acc, has_header = has_header)
+
+
     def mainFunc(self):
         # Check if the input sam/bam file is sorted by query/read name
         # If the sam/bam file is not sorted by query, then sort by query
@@ -250,7 +284,9 @@ class BamSamplerMain:
         infile = self.infile
         outdir = self.outdir
         initdir = self.initdir
+        bamdir = self.bamdir
         do_ref = self.do_ref
+        use_qsort = self.use_qsort
 
         if self.is_query_sorted(infile):
             print("The infile is sorted by query.")
@@ -284,7 +320,10 @@ class BamSamplerMain:
         # Finally prepare the count table.
         # Do count table; one for before the PCR collapse and another is
         # after the PCR collapse.
-
+        lsuf_lst = self.lsuf_lst
+        has_header = True
+        self.write_read_count_table(lsuf_lst, has_header, bamdir, subdir = '')
+        self.write_read_count_table(lsuf_lst, has_header, bamdir, subdir = 'nodupdir')
 
 
 if __name__ == "__main__":
@@ -292,6 +331,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--infile", dest = "infile", type = str, required = True, help = "Location of the input sam/bam file.")
     parser.add_argument("--outdir", dest = "outdir", type = str, required = True, help = "Location of the output directory.")
+    parser.add_argument("--project_id", dest = "project_id", type = str, required = True, help = "Project id string")
     parser.add_argument("--run_type", dest = "run_type", type = str, required = True, help = "Type of the run, steps/depth.")
     parser.add_argument("--steps_num", dest = "steps_num", type = int, default = -1, help = "Number of steps when run_type is steps")
     parser.add_argument("--depth_p", dest = "depth_p", type = int, default = -1, help = "Percentage of depth when run_type is depth")
@@ -303,6 +343,8 @@ if __name__ == "__main__":
     parser.add_argument('--no_ref', dest = 'do_ref', action = 'store_false', default = True, help = 'Does not generate patho ref.')
 
     parser.add_argument('--no_qsub', dest = 'use_qsub', action = 'store_false', default = True, help = 'Does not submit qsub jobs.' )
+    parser.add_argument('--no_qsort', dest = 'use_qsort', action = 'store_false', default = True, help = 'Does not do the infile qsort.' )
+    parser.add_argument('--no_remove_bu', dest = 'do_remove_bu', action = 'store_false', default = True, help = 'Does not remove unmapped reads from bam.' )
     
     args = parser.parse_args()
     bsmo = BamSamplerMain(args)
