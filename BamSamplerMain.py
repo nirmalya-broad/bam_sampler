@@ -4,9 +4,11 @@ import os
 import argparse
 import subprocess
 import ntpath
+import shutil
 
 from subprocess import call 
 
+from sbcore import SBCore
 
 class BamSamplerMain:
     def __init__(self, args):
@@ -17,20 +19,67 @@ class BamSamplerMain:
         self.depth_p = args.depth_p
         self.repeat_num = args.repeat_num
         self.main_seed = args.main_seed
+        self.use_qsub = args.use_qsub
+        self.add5 = args.add5
+        self.add3  = args.add3
+        self.patho_id = args.patho_id
+        self.do_ref = args.do_ref
+
+        basepath = os.path.dirname(os.path.realpath(__file__))
+        self.Script_dir = basepath
+        self.SBCore = self.Script_dir + "/" + "sbcore.py"
+
 
         self.samtools_path = "/broad/IDP-Dx_work/nirmalya/local/bin/samtools"
         self.remove_bu_path = "/broad/IDP-Dx_work/nirmalya/research/bam_sampler/remove_bu"        
         self.frag_count_path = "/broad/IDP-Dx_work/nirmalya/research/bam_sampler/frag_count"
         self.seed_gen_path = "/broad/IDP-Dx_work/nirmalya/research/bam_sampler/seed_gen"
+        self.sample_bam_path = "/broad/IDP-Dx_work/nirmalya/research/bam_sampler/sample_bam"
+        self.UGER_cbp = "/broad/IDP-Dx_work/nirmalya/tools/ugetools/UGE_SUBMISSIONS/UGER_cmd_batch_processor.py"
+        self.gff_parse = "/broad/IDP-Dx_work/nirmalya/pipeline/beta/shell_scripts/gff_parse3.sh"    
+        self.patho_dbpath = "/broad/IDP-Dx_storage/NCBI_files2/"    
 
         outdir = self.outdir
         if not os.path.exists(outdir):
             os.makedirs(outdir)
 
-        temp_dir = outdir + "/temp_dir"
-        if not os.path.exists(temp_dir):
-            os.makedirs(temp_dir)
-        self.temp_dir = temp_dir
+        initdir = outdir + "/initdir"
+        if not os.path.exists(initdir):
+            os.makedirs(initdir)
+        self.initdir = initdir
+
+        datadir = outdir + "/datadir"
+        if not os.path.exists(datadir):
+            os.makedirs(datadir)
+        self.datadir = datadir
+
+        bamdir = outdir + "/bamdir"
+        if not os.path.exists(bamdir):
+            os.makedirs(bamdir)
+        self.bamdir = bamdir
+
+        logdir = outdir + "/logdir"
+        if not os.path.exists(logdir):
+            os.makedirs(logdir)
+        self.logdir = logdir
+
+        UGER_cbp_dir = outdir + "/UGER_cbp"
+
+        if self.use_qsub and os.path.exists(UGER_cbp_dir):
+            shutil.rmtree(UGER_cbp_dir)
+        self.UGER_cbp_dir = UGER_cbp_dir
+
+        temp_bamdir = bamdir + "/temp_bamdir"
+        if not os.path.exists(temp_bamdir):
+            os.makedirs(temp_bamdir)
+
+        nodupdir = bamdir + "/nodupdir"
+        if not os.path.exists(nodupdir):
+            os.makedirs(nodupdir)
+
+        nodupdir_temp_bamdir = nodupdir + "/temp_bamdir"
+        if not os.path.exists(nodupdir_temp_bamdir):
+            os.makedirs(nodupdir_temp_bamdir)
 
         self.delete_mainbam = False
 
@@ -119,6 +168,80 @@ class BamSamplerMain:
         print("seed_gen_cmd: " + seed_gen_cmd)
         call(seed_gen_cmd.split())
         print("End of seed_gen")
+        self.seed_table = seed_table
+        return seed_table
+
+    def get_sample_bam_core_cmd(self, lsuffix, ltop_seed, lsample_p):
+        #print("lsuffix: " + lsuffix + " ltop_seed: " + ltop_seed + " lsample_p: " + lsample_p)
+        infile_str = self.infile_qsorted_mapped
+        bamdir = self.bamdir
+        patho_id = self.patho_id
+        datadir = self.datadir
+        #infile_bname = os.path.basename(infile_str)
+        #out_suffix = "_" + lsuffix + ".bam"
+        #outfile_bname = infile_bname.replace(".bam", out_suffix)
+        #out_file = bamdir + "/" + outfile_bname
+        #sample_bam_path = self.sample_bam_path
+        SBCore = self.SBCore
+        SB_cmd = SBCore + " --infile " + infile_str + " --bamdir " + bamdir +\
+            " --suffix " + lsuffix + " --sample_p " + lsample_p +\
+            " --top_seed " + ltop_seed + " --patho_id " + patho_id +\
+            " --datadir " + datadir
+        return SB_cmd
+        
+        
+        
+    def exe_sample_bam_core(self, seed_table):
+
+        logdir = self.logdir
+        use_qsub = self.use_qsub
+        sbcore_job_path = logdir + "/" + "sbcore_joblist_txt"
+        num_cores = 1
+        lmemory = 8
+        UGER_cbp = self.UGER_cbp
+        UGER_cbp_dir = self.UGER_cbp_dir
+
+        jfile = open(sbcore_job_path, "w")
+        with open(seed_table) as stab:
+            for line1 in stab:
+                line2 = line1.rstrip()
+                parts = line2.split()
+                lsample = parts[0]
+                lrepeat = parts[1]
+                lsample_p = parts[2]
+                ltop_seed = parts[3]
+                lsuffix = lsample + "_" + lrepeat
+                print(lsuffix)
+                main_seed = self.main_seed
+                cmd_str = self.get_sample_bam_core_cmd(lsuffix, ltop_seed,\
+                    lsample_p)
+                loutfile = logdir + "/" + lsuffix + "_out.txt"
+                lerrfile = logdir + "/" + lsuffix + "_err.txt"
+                cmd_str2 = cmd_str + " 1> " + loutfile  + " 2> " + lerrfile
+                print(cmd_str2) 
+                jfile.write(cmd_str2 + "\n")
+        jfile.close()
+        joblist_cmd = UGER_cbp + " --cmds_file " + sbcore_job_path + \
+                                " --batch_size 1" + \
+                                " --num_cores " + str(num_cores) + \
+                                " --memory " + str(lmemory) + \
+                                " --tracking_dir " + UGER_cbp_dir + \
+                                " --project_name broad --bash_header /broad/IDP-Dx_work/nirmalya/bash_header"        
+        if use_qsub:
+            call(joblist_cmd.split())
+
+       
+    def exe_gff_parser(self):
+        gff_parse = self.gff_parse
+        patho_dbpath = self.patho_dbpath
+        datadir = self.datadir
+        add3 = self.add3
+        add5 = self.add5
+        patho_id = self.patho_id
+
+        gff_cmd = "sh " + gff_parse + " " + patho_dbpath + " " + datadir + " " + datadir + " " + str(add5) + " " + str(add3) + " " + patho_id
+        print("gff_cmd: " + gff_cmd)
+        call(gff_cmd.split())
 
     def mainFunc(self):
         # Check if the input sam/bam file is sorted by query/read name
@@ -126,16 +249,17 @@ class BamSamplerMain:
         
         infile = self.infile
         outdir = self.outdir
-        temp_dir = self.temp_dir
+        initdir = self.initdir
+        do_ref = self.do_ref
 
         if self.is_query_sorted(infile):
             print("The infile is sorted by query.")
-            self.infile_qsorted = self.symlink_outdir(infile, temp_dir)
+            self.infile_qsorted = self.symlink_outdir(infile, initdir)
         else:
             print("The infile is not sorted by query.")
             print("infile: " + infile)
-            print("temp_dir: " + temp_dir)
-            self.infile_qsorted = self.sort_by_queryname(infile, temp_dir)
+            print("initdir: " + initdir)
+            self.infile_qsorted = self.sort_by_queryname(infile, initdir)
 
         # get the reads that are mapped
         infile_qsorted = self.infile_qsorted
@@ -147,11 +271,15 @@ class BamSamplerMain:
         print("frag_count of infile_qsorted_mapped: " + str(lfrag_count))
 
         # Run the seed generator from infile_qsorted_mapped
-        self.exe_seed_gen()
+        seed_table = self.exe_seed_gen()
+        
+        # Run gff_parser
+        if do_ref:
+            self.exe_gff_parser()
 
         # Run each jobs subjobs for sampling followed by counting
         # Also inside each job do PCR collapse and then counting
-        self.exe_sample_bam_core()
+        self.exe_sample_bam_core(seed_table)
 
         # Finally prepare the count table.
         # Do count table; one for before the PCR collapse and another is
@@ -169,6 +297,12 @@ if __name__ == "__main__":
     parser.add_argument("--depth_p", dest = "depth_p", type = int, default = -1, help = "Percentage of depth when run_type is depth")
     parser.add_argument("--repeat_num", dest = "repeat_num", type = int, default = 1, help = "Number of repetition." )
     parser.add_argument("--main_seed", dest = "main_seed", type = int, default = 12345, help = "Value of main seed")
+    parser.add_argument("--patho_id", dest = "patho_id", type = str, required = True, help = "NCBI ref id for the species")
+    parser.add_argument('--ADD5', dest = 'add5', type = int, default = 0, help = 'ADD5 for gff parser')
+    parser.add_argument('--ADD3', dest = 'add3', type = int, default = 0, help = 'ADD3 for gff parser')
+    parser.add_argument('--no_ref', dest = 'do_ref', action = 'store_false', default = True, help = 'Does not generate patho ref.')
+
+    parser.add_argument('--no_qsub', dest = 'use_qsub', action = 'store_false', default = True, help = 'Does not submit qsub jobs.' )
     
     args = parser.parse_args()
     bsmo = BamSamplerMain(args)

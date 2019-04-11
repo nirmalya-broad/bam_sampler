@@ -290,11 +290,6 @@ void sample_bamc::main_func() {
                 write_set.insert(seq_vec[j]);
             }
 
-            std::cout << "\n\n------------------\n";
-            for (auto x: write_set) { 
-                std::cout << x << ' ';
-            }
-            std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>\n\n";
             
         }
 
@@ -302,7 +297,6 @@ void sample_bamc::main_func() {
         if (write_ind < write_lim) {
             if (write_set.find(total_frag_ind) != write_set.end()) {
 
-                std::cout << total_frag_ind << ' ';
                 
                 if (sam_write1(fp_out, hdr_out, read1) < 0) {
                     std::cout << "Problem with sam_write1 for read1" << "\n";
