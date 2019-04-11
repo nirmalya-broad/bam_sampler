@@ -7,6 +7,7 @@ import ntpath
 import shutil
 
 from subprocess import call 
+from shutil import copyfile
 
 from sbcore import SBCore
 from Parse_featureCounts import get_all_gene_counts
@@ -276,7 +277,22 @@ class BamSamplerMain:
 
         get_all_gene_counts(project_dir, loutfile, lsample_lst, ref_acc, has_header = has_header)
 
+    def process_seed_info(self):
+        summary_dir = self.summary_dir
+        seed_table = self.seed_table
 
+        main_seed_file = summary_dir + "/main_seed.txt"
+        with open(main_seed_file, "w") as outf:
+            outf.write("main seed:\t" + str(self.main_seed) + "\n")
+ 
+        project_id = self.project_id 
+        ref_acc = self.patho_id
+        dest_leaf = project_id + "_" + ref_acc + "_seed.txt" 
+        seed_table_leaf = os.path.basename(seed_table)
+        seed_table_dest = summary_dir + "/" + dest_leaf
+        copyfile(seed_table, seed_table_dest)    
+
+ 
     def mainFunc(self):
         # Check if the input sam/bam file is sorted by query/read name
         # If the sam/bam file is not sorted by query, then sort by query
@@ -324,6 +340,8 @@ class BamSamplerMain:
         has_header = True
         self.write_read_count_table(lsuf_lst, has_header, bamdir, subdir = '')
         self.write_read_count_table(lsuf_lst, has_header, bamdir, subdir = 'nodupdir')
+
+        self.process_seed_info()
 
 
 if __name__ == "__main__":
