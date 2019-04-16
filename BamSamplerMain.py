@@ -31,6 +31,8 @@ class BamSamplerMain:
         self.do_ref = args.do_ref
         self.use_qsort = args.use_qsort
         self.do_remove_bu = args.do_remove_bu
+        self.start_read = args.start_read
+        self.do_metrics = args.do_metrics
 
         basepath = os.path.dirname(os.path.realpath(__file__))
         self.Script_dir = basepath
@@ -175,12 +177,21 @@ class BamSamplerMain:
         steps_num = self.steps_num
         depth_p = self.depth_p
         repeat_num = self.repeat_num
+        start_read = self.start_read
+        infile_frag_count = self.infile_frag_count
+
+        print("stard_read: " + str(start_read))
+        print("infile_frag_count: " + str(infile_frag_count))
+        start_read_p = (start_read * 100.0) / infile_frag_count
+        print("start_read_p: " + str(start_read_p))
 
         seed_table = infile_qsorted_mapped.replace(".bam", "_seed.txt")
         seed_gen_cmd = seed_gen_path + " -i " + infile_qsorted_mapped +\
              " -o " + seed_table + " -m " + str(main_seed) +\
              " -r " + run_type + " -s " + str(steps_num) +\
-             " -d " + str(depth_p) + " --repeat_num " + str(repeat_num)
+             " -d " + str(depth_p) + " --repeat_num " + str(repeat_num) +\
+             " --start_read_p " + str(start_read_p)
+
         print("seed_gen_cmd: " + seed_gen_cmd)
         call(seed_gen_cmd.split())
         print("End of seed_gen")
@@ -303,6 +314,7 @@ class BamSamplerMain:
         bamdir = self.bamdir
         do_ref = self.do_ref
         use_qsort = self.use_qsort
+        do_metrics = self.do_metrics
 
         if self.is_query_sorted(infile):
             print("The infile is sorted by query.")
@@ -321,6 +333,7 @@ class BamSamplerMain:
         print("Getting count of: " + infile_qsorted_mapped)
         lfrag_count = self.get_frag_count(infile_qsorted_mapped)
         print("frag_count of infile_qsorted_mapped: " + str(lfrag_count))
+        self.infile_frag_count = lfrag_count
 
         # Run the seed generator from infile_qsorted_mapped
         seed_table = self.exe_seed_gen()
@@ -336,12 +349,13 @@ class BamSamplerMain:
         # Finally prepare the count table.
         # Do count table; one for before the PCR collapse and another is
         # after the PCR collapse.
-        lsuf_lst = self.lsuf_lst
-        has_header = True
-        self.write_read_count_table(lsuf_lst, has_header, bamdir, subdir = '')
-        self.write_read_count_table(lsuf_lst, has_header, bamdir, subdir = 'nodupdir')
+        if do_metrics:
+            lsuf_lst = self.lsuf_lst
+            has_header = True
+            self.write_read_count_table(lsuf_lst, has_header, bamdir, subdir = '')
+            self.write_read_count_table(lsuf_lst, has_header, bamdir, subdir = 'nodupdir')
 
-        self.process_seed_info()
+            self.process_seed_info()
 
 
 if __name__ == "__main__":
@@ -358,11 +372,13 @@ if __name__ == "__main__":
     parser.add_argument("--patho_id", dest = "patho_id", type = str, required = True, help = "NCBI ref id for the species")
     parser.add_argument('--ADD5', dest = 'add5', type = int, default = 0, help = 'ADD5 for gff parser')
     parser.add_argument('--ADD3', dest = 'add3', type = int, default = 0, help = 'ADD3 for gff parser')
+    parser.add_argument('--start_read', dest = 'start_read', type = int, default = 100, help = 'Read number of starting breakpoint')
     parser.add_argument('--no_ref', dest = 'do_ref', action = 'store_false', default = True, help = 'Does not generate patho ref.')
 
     parser.add_argument('--no_qsub', dest = 'use_qsub', action = 'store_false', default = True, help = 'Does not submit qsub jobs.' )
     parser.add_argument('--no_qsort', dest = 'use_qsort', action = 'store_false', default = True, help = 'Does not do the infile qsort.' )
     parser.add_argument('--no_remove_bu', dest = 'do_remove_bu', action = 'store_false', default = True, help = 'Does not remove unmapped reads from bam.' )
+    parser.add_argument('--no_metrics', dest = 'do_metrics', action = 'store_false', default = True, help = 'Does not do the metrics.')
     
     args = parser.parse_args()
     bsmo = BamSamplerMain(args)

@@ -29,6 +29,8 @@ class args_c {
         int steps_num;
         double depth_p;
         unsigned int repeat_num;
+        double start_read_p;
+        double end_read_p;
         void print_help();
         bool parse_args(int argc, char* argv[]);
 
@@ -54,6 +56,8 @@ class seed_genc {
         bam_reader in_reader;        
         bam_stat in_stat;
         long depth;
+        double start_read_p;
+        double end_read_p;
         std::vector<double> sample_p_vec;
 };
 
@@ -67,6 +71,8 @@ seed_genc::seed_genc(args_c args_o)
     steps_num = args_o.steps_num;
     depth_p = args_o.depth_p;
     repeat_num = args_o.repeat_num;
+    start_read_p = args_o.start_read_p;
+    end_read_p = args_o.end_read_p;
     
 }
 
@@ -76,7 +82,7 @@ void args_c::print_help() {
     std::cout << "Usage: seed_gen --infile <sam/bam> --outfile <seed_table>"
         " --run_type <steps/depth> [ --main_seed <main_seed_number>"
         " --repeat_num <number of repeats> --steps_num <number of steps>"
-        " --depth_p <depth percentage>]"
+        " --depth_p <depth percentage> --start_read_p --end_read_p]"
         "\n\n";
 }
 
@@ -96,6 +102,8 @@ bool args_c::parse_args(int argc, char* argv[]) {
             "Number of steps.")
         ("depth_p,d", po::value(&depth_p)->default_value(-1),
             "Percentage of depth")
+        ("start_read_p", po::value(&start_read_p), "Percentage of reads for start breakpoint")
+        ("end_read_p", po::value(&end_read_p)->default_value(100.0), "Percentage of reads for end breakpoint")
         ;
 
     po::variables_map vm;
@@ -182,8 +190,15 @@ void seed_genc::main_func() {
         // If steps equal to 1; then it would indicate 100% of the reads
         // A typical step size would be more than 10 and may be less than 20.
 
-        for (int j = 1; j <= steps_num; j++) {
-            double l_sample_p_log = (log2(100.0) * j ) / steps_num;
+        double end_p = end_read_p;
+        double start_log = log2(start_read_p);
+        double end_log = log2(end_p);
+        double diff_start_end = end_log - start_log;
+        double step_val = diff_start_end / (steps_num - 1);
+
+
+        for (int j = 0; j < steps_num; j++) {
+            double l_sample_p_log = start_log + j * step_val;
             double l_sample_p = exp2(l_sample_p_log);
             sample_p_vec.push_back(l_sample_p);
         }
@@ -193,8 +208,13 @@ void seed_genc::main_func() {
             for (int k = 0; k < repeat_num; k++) {
                 int l_step = j + 1;
                 int l_repeat = k + 1;
-                outf << "S" << l_step << "\t" << "R" << l_repeat 
-                    << "\t" <<  sample_p_vec[j] << "\t" << r_engine() << "\n";
+                if (j == (steps_num -1) && end_read_p == 100.0)  {
+                    outf << "S" << l_step << "\t" << "R1" << "\t" <<  sample_p_vec[j] << "\t" << r_engine() << "\n";
+                    break;
+                } else {
+                    outf << "S" << l_step << "\t" << "R" << l_repeat 
+                        << "\t" <<  sample_p_vec[j] << "\t" << r_engine() << "\n";
+                }
             }
         }
 
