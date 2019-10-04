@@ -351,7 +351,7 @@ class BamSamplerMain:
         # after the PCR collapse.
         if do_metrics:
             lsuf_lst = self.lsuf_lst
-            has_header = True
+            has_header = False
             self.write_read_count_table(lsuf_lst, has_header, bamdir, subdir = '')
             self.write_read_count_table(lsuf_lst, has_header, bamdir, subdir = 'nodupdir')
 
@@ -366,7 +366,7 @@ if __name__ == "__main__":
     parser.add_argument("--project_id", dest = "project_id", type = str, required = True, help = "Project id string")
     parser.add_argument("--run_type", dest = "run_type", type = str, required = True, help = "Type of the run, steps/depth.")
     parser.add_argument("--steps_num", dest = "steps_num", type = int, default = -1, help = "Number of steps when run_type is steps")
-    parser.add_argument("--depth_p", dest = "depth_p", type = int, default = -1, help = "Percentage of depth when run_type is depth")
+    parser.add_argument("--depth_p", dest = "depth_p", type = float, default = -1, help = "Percentage of depth when run_type is depth")
     parser.add_argument("--repeat_num", dest = "repeat_num", type = int, default = 1, help = "Number of repetition." )
     parser.add_argument("--main_seed", dest = "main_seed", type = int, default = 12345, help = "Value of main seed")
     parser.add_argument("--patho_id", dest = "patho_id", type = str, required = True, help = "NCBI ref id for the species")
