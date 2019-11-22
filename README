@@ -1,0 +1,47 @@
+This package allows random sampling of reads from a sam/bam file with various depth (number of sampled reads). For random sampling, reproducible random seeds are generated, the reads of the sam/bam file are shuffled using those seeds and top reads are collected according to the depth requirement.
+
+This tool is written in C++ and python. The starting point of the program is a python script called BamSamplerMain.py which can be executed as follows:
+
+/broad/IDP-Dx_work/nirmalya/research/bam_sampler/BamSamplerMain.py --infile <sam/bam> --outdir <outdir> --run_type <steps/depth> --steps_num <number of steps> --repeat_num <number of sampling instances> --patho_id <NCBI refseq number> --project_id <project id string> --start_read <read number of starting breakpoint>
+
+The python help message is as follows:
+
+usage: BamSamplerMain.py [-h] --infile INFILE --outdir OUTDIR --project_id
+                         PROJECT_ID --run_type RUN_TYPE
+                         [--steps_num STEPS_NUM] [--depth_p DEPTH_P]
+                         [--repeat_num REPEAT_NUM] [--main_seed MAIN_SEED]
+                         --patho_id PATHO_ID [--ADD5 ADD5] [--ADD3 ADD3]
+                         [--start_read START_READ] [--no_ref] [--no_qsub]
+                         [--no_qsort] [--no_remove_bu] [--no_metrics]
+
+Process command for bam sampler.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --infile INFILE       Location of the input sam/bam file. (default: None)
+  --outdir OUTDIR       Location of the output directory. (default: None)
+  --project_id PROJECT_ID
+                        Project id string (default: None)
+  --run_type RUN_TYPE   Type of the run, steps/depth. (default: None)
+  --steps_num STEPS_NUM
+                        Number of steps when run_type is steps (default: -1)
+  --depth_p DEPTH_P     Percentage of depth when run_type is depth (default:
+                        -1)
+  --repeat_num REPEAT_NUM
+                        Number of repetition. (default: 1)
+  --main_seed MAIN_SEED
+                        Value of main seed (default: 12345)
+  --patho_id PATHO_ID   NCBI ref id for the species (default: None)
+  --ADD5 ADD5           ADD5 for gff parser (default: 0)
+  --ADD3 ADD3           ADD3 for gff parser (default: 0)
+  --start_read START_READ
+                        Read number of starting breakpoint (default: 100)
+  --no_ref              Does not generate patho ref. (default: True)
+  --no_qsub             Does not submit qsub jobs. (default: True)
+  --no_qsort            Does not do the infile qsort. (default: True)
+  --no_remove_bu        Does not remove unmapped reads from bam. (default:
+                        True)
+  --no_metrics          Does not do the metrics. (default: True)
+
+
+ 
