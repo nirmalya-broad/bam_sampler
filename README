@@ -2,7 +2,7 @@ This package allows random sampling of reads from a sam/bam file with various de
 
 This tool is written in C++ and python. The starting point of the program is a python script called BamSamplerMain.py which can be executed as follows:
 
-/broad/IDP-Dx_work/nirmalya/research/bam_sampler/BamSamplerMain.py --infile <sam/bam> --outdir <outdir> --run_type <steps/depth> --steps_num <number of steps> --repeat_num <number of sampling instances> --patho_id <NCBI refseq number> --project_id <project id string> --start_read <read number of starting breakpoint>
+BamSamplerMain.py --infile <sam/bam> --outdir <outdir> --run_type <steps/depth> --steps_num <number of steps> --repeat_num <number of sampling instances> --patho_id <NCBI refseq number> --project_id <project id string> --start_read <read number of starting breakpoint>
 
 The python help message is as follows:
 
