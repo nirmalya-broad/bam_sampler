@@ -5,7 +5,6 @@
 #include <assert.h>
 #include <htslib/sam.h>
 #include <map>
-#include "my_exception.h"
 #include <boost/program_options.hpp>
 #include <regex>
 #include <regex.h>
